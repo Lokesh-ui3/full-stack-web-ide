@@ -12,9 +12,9 @@ import { Runner } from './components/Runner';
 import { DbExplorer, DbGrid } from './components/DbViewer';
 
 const TEMPLATE_COMMANDS: Record<string, string> = {
-  django: "python manage.py runserver 0.0.0.0:8000",
-  flask: "python -m flask run --host=0.0.0.0 --port=8000",
-  fastapi: "python -m uvicorn main:app --host=0.0.0.0 --port=8000",
+  django: "python manage.py runserver 0.0.0.0:8080",
+  flask: "python -m flask run --host=0.0.0.0 --port=8080",
+  fastapi: "python -m uvicorn main:app --host=0.0.0.0 --port=8080",
   general: "python main.py"
 };
 
@@ -376,6 +376,8 @@ export default function App() {
       return TEMPLATE_COMMANDS.flask;
     } else if (hasFile('main.py', fileTree)) {
       return TEMPLATE_COMMANDS.fastapi;
+    } else if (hasFile('index.html', fileTree)) {
+      return "python -m http.server --bind 0.0.0.0 8080";
     }
     return TEMPLATE_COMMANDS.general;
   };

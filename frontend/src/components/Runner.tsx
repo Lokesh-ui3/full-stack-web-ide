@@ -9,7 +9,7 @@ interface RunnerProps {
 
 export const Runner: React.FC<RunnerProps> = ({ projectName, defaultCommand, onStatusChange }) => {
   const [command, setCommand] = useState(defaultCommand);
-  const [port, setPort] = useState(8000);
+  const [port, setPort] = useState(8080);
   const [status, setStatus] = useState('stopped'); // stopped, starting, running, failed
   const [logs, setLogs] = useState<string[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -127,7 +127,7 @@ export const Runner: React.FC<RunnerProps> = ({ projectName, defaultCommand, onS
             style={{ width: '80px', height: '30px', fontFamily: 'var(--font-mono)', fontSize: '12px' }}
             value={port}
             onChange={(e) => {
-              const newPort = parseInt(e.target.value) || 8000;
+              const newPort = parseInt(e.target.value) || 8080;
               setPort(newPort);
               setCommand(prev => {
                 let updated = prev.replace(/:(\d+)/, `:${newPort}`);
