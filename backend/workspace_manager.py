@@ -127,6 +127,7 @@ def clone_git_repo(project_name: str, repo_url: str) -> None:
     
     git.Repo.clone_from(repo_url, proj_dir)
 
+
 def create_project_boilerplate(project_name: str, template: str) -> None:
     proj_dir = safe_path(project_name)
     if os.path.exists(proj_dir) and os.listdir(proj_dir):
@@ -138,9 +139,8 @@ def create_project_boilerplate(project_name: str, template: str) -> None:
         # Create FastAPI main.py, requirements.txt, and simple DB setup
         write_file_content(project_name, "main.py", """import os
 import sqlite3
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 app = FastAPI(title="My FastAPI IDE App")
 
@@ -151,7 +151,7 @@ def init_db():
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS todos (
-            id INTEGER PRIMARY KEY AUTOCT_INCREMENT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             completed INTEGER DEFAULT 0
         )
@@ -178,7 +178,12 @@ async def read_root():
     conn.close()
     
     todo_list_html = "".join([
-        f'<li>{"<s>" if t["completed"] else ""}{t["title"]}{"</s>" if t["completed"] else ""}</li>' 
+        f'<li style="display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.03); padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255, 255, 255, 0.05); font-size: 14px;">'
+        f'<span>{"<s>" if t["completed"] else ""}{t["title"]}{"</s>" if t["completed"] else ""}</span>'
+        f'<span style="font-size: 11px; background: { "rgba(16, 185, 129, 0.15)" if t["completed"] else "rgba(99, 102, 241, 0.15)" }; color: { "#34d399" if t["completed"] else "#a5b4fc" }; padding: 2px 8px; border-radius: 9999px;">'
+        f'{"Done" if t["completed"] else "Active"}'
+        f'</span>'
+        f'</li>'
         for t in todos
     ])
     
@@ -189,57 +194,96 @@ async def read_root():
         <title>FastAPI Web IDE App</title>
         <style>
             body {{
-                font-family: 'Outfit', 'Inter', sans-serif;
-                background: linear-gradient(135deg, #0f172a, #1e1b4b);
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background: linear-gradient(135deg, #0b0f19, #1e1b4b);
                 color: #f8fafc;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                height: 100vh;
+                min-height: 100vh;
                 margin: 0;
+                padding: 24px;
             }}
             .card {{
-                background: rgba(255, 255, 255, 0.05);
-                backdrop-filter: blur(10px);
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                background: rgba(255, 255, 255, 0.04);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 border-radius: 16px;
                 padding: 32px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-                max-width: 400px;
+                max-width: 450px;
                 width: 100%;
             }}
             h1 {{
                 font-size: 24px;
+                margin-top: 0;
                 margin-bottom: 8px;
                 background: linear-gradient(to right, #38bdf8, #818cf8);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
             }}
             p {{ color: #94a3b8; font-size: 14px; margin-bottom: 24px; }}
-            ul {{ list-style: none; padding: 0; }}
-            li {{
-                background: rgba(255, 255, 255, 0.03);
-                padding: 12px 16px;
-                border-radius: 8px;
-                margin-bottom: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
+            ul {{ list-style: none; padding: 0; margin: 0 0 24px 0; }}
+            .todo-form {{
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }}
+            .form-input {{
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
                 font-size: 14px;
+                outline: none;
+            }}
+            .form-input:focus {{
+                border-color: #6366f1;
+            }}
+            .btn {{
+                background: #6366f1;
+                border: none;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+            }}
+            .btn:hover {{
+                background: #4f46e5;
             }}
         </style>
     </head>
     <body>
         <div class="card">
-            <h1>FastAPI Backend Running!</h1>
-            <p>This page is rendering live data fetched from SQLite database in the workspace.</p>
-            <h3>Todo List:</h3>
+            <h1>Todo Application</h1>
+            <p>Rendered dynamically by FastAPI. Data is stored in SQLite app.db.</p>
+            
             <ul>
                 {todo_list_html}
             </ul>
+
+            <form action="/add" method="POST" class="todo-form">
+                <input type="text" name="title" required placeholder="Add new task..." class="form-input" />
+                <button type="submit" class="btn">Add Task</button>
+            </form>
         </div>
     </body>
     </html>
     '''
     return HTMLResponse(content=html_content)
+
+@app.post("/add")
+async def add_todo(title: str = Form(...)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO todos (title, completed) VALUES (?, 0)", (title,))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/", status_code=303)
 
 @app.get("/api/todos")
 async def get_todos():
@@ -257,7 +301,7 @@ uvicorn[standard]==0.30.1
     elif template == "flask":
         write_file_content(project_name, "app.py", """import os
 import sqlite3
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, request, redirect
 
 app = Flask(__name__)
 DB_FILE = "app.db"
@@ -269,15 +313,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            quantity INTEGER DEFAULT 1
+            completed INTEGER DEFAULT 0
         )
     ''')
     c.execute("SELECT COUNT(*) FROM items")
     if c.fetchone()[0] == 0:
-        c.executemany("INSERT INTO items (name, quantity) VALUES (?, ?)", [
-            ("Workspace Files", 10),
-            ("SQLite DB Tables", 4),
-            ("Live Server Instances", 1)
+        c.executemany("INSERT INTO items (name, completed) VALUES (?, ?)", [
+            ("Learn Flask in Web IDE", 1),
+            ("Browse tables in DB Viewer", 0),
+            ("Build fully functional endpoints", 0)
         ])
     conn.commit()
     conn.close()
@@ -289,10 +333,18 @@ def home():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT * FROM items")
-    items = [{"id": r[0], "name": r[1], "quantity": r[2]} for r in c.fetchall()]
+    items = [{"id": r[0], "name": r[1], "completed": bool(r[2])} for r in c.fetchall()]
     conn.close()
     
-    list_items = "".join([f'<li>{item["name"]} - Quantity: <b>{item["quantity"]}</b></li>' for item in items])
+    list_items = "".join([
+        f'<li style="display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.03); padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255, 255, 255, 0.05); font-size: 14px;">'
+        f'<span>{"<s>" if item["completed"] else ""}{item["name"]}{"</s>" if item["completed"] else ""}</span>'
+        f'<span style="font-size: 11px; background: { "rgba(16, 185, 129, 0.15)" if item["completed"] else "rgba(99, 102, 241, 0.15)" }; color: { "#34d399" if item["completed"] else "#a5b4fc" }; padding: 2px 8px; border-radius: 9999px;">'
+        f'{"Completed" if item["completed"] else "Active"}'
+        f'</span>'
+        f'</li>'
+        for item in items
+    ])
     
     html_content = f'''
     <!DOCTYPE html>
@@ -301,14 +353,15 @@ def home():
         <title>Flask Web IDE App</title>
         <style>
             body {{
-                font-family: 'Outfit', 'Inter', sans-serif;
-                background: linear-gradient(135deg, #0f172a, #111827);
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background: linear-gradient(135deg, #0b0f19, #111827);
                 color: #f8fafc;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                height: 100vh;
+                min-height: 100vh;
                 margin: 0;
+                padding: 24px;
             }}
             .card {{
                 background: rgba(255, 255, 255, 0.04);
@@ -317,60 +370,97 @@ def home():
                 border-radius: 16px;
                 padding: 32px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-                max-width: 400px;
+                max-width: 450px;
                 width: 100%;
             }}
             h1 {{
                 font-size: 24px;
+                margin-top: 0;
                 margin-bottom: 8px;
                 background: linear-gradient(to right, #fb7185, #f43f5e);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
             }}
             p {{ color: #94a3b8; font-size: 14px; margin-bottom: 24px; }}
-            ul {{ list-style: none; padding: 0; }}
-            li {{
-                background: rgba(255, 255, 255, 0.03);
-                padding: 12px 16px;
-                border-radius: 8px;
-                margin-bottom: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
+            ul {{ list-style: none; padding: 0; margin: 0 0 24px 0; }}
+            .todo-form {{
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }}
+            .form-input {{
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
                 font-size: 14px;
+                outline: none;
+            }}
+            .form-input:focus {{
+                border-color: #fb7185;
+            }}
+            .btn {{
+                background: #f43f5e;
+                border: none;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+            }}
+            .btn:hover {{
+                background: #e11d48;
             }}
         </style>
     </head>
     <body>
         <div class="card">
-            <h1>Flask Backend Running!</h1>
-            <p>Rendered dynamically from Flask on local development server.</p>
-            <h3>Workspace Inventory:</h3>
+            <h1>Flask Todo List</h1>
+            <p>Rendered dynamically from Flask. SQLite db contains the tasks.</p>
             <ul>
                 {list_items}
             </ul>
+            <form action="/add" method="POST" class="todo-form">
+                <input type="text" name="name" required placeholder="Add item name..." class="form-input" />
+                <button type="submit" class="btn">Add Task</button>
+            </form>
         </div>
     </body>
     </html>
     '''
     return render_template_string(html_content)
 
+@app.route("/add", methods=["POST"])
+def add_item():
+    name = request.form.get("name")
+    if name:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("INSERT INTO items (name, completed) VALUES (?, 0)", (name,))
+        conn.commit()
+        conn.close()
+    return redirect("/")
+
 @app.route("/api/items")
 def get_items():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT * FROM items")
-    items = [{"id": r[0], "name": r[1], "quantity": r[2]} for r in c.fetchall()]
+    items = [{"id": r[0], "name": r[1], "completed": bool(r[2])} for r in c.fetchall()]
     conn.close()
     return jsonify(items)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-""")
+""" )
         write_file_content(project_name, "requirements.txt", """flask==3.0.3
 """)
         
     elif template == "django":
         # Create standard Django structure manually to avoid requiring django-admin preinstalled
-        # We write a basic self-contained Django startup
         write_file_content(project_name, "manage.py", """#!/usr/bin/env python
 import os
 import sys
@@ -402,16 +492,19 @@ application = get_wsgi_application()
         write_file_content(project_name, "myproject/urls.py", """from django.contrib import admin
 from django.urls import path
 from django.http import HttpResponse
+from django.shortcuts import redirect
+from django.views.decorators.csrf import csrf_exempt
 import sqlite3
+import os
+
+db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db.sqlite3")
 
 def home_view(request):
-    # Retrieve from sqlite db
-    db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db.sqlite3")
     todos = []
     try:
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, title TEXT, done INTEGER)")
+        c.execute("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, done INTEGER)")
         c.execute("SELECT COUNT(*) FROM tasks")
         if c.fetchone()[0] == 0:
             c.executemany("INSERT INTO tasks (title, done) VALUES (?, ?)", [
@@ -426,7 +519,15 @@ def home_view(request):
     except Exception as e:
         todos = [{"id": 0, "title": f"DB load error: {str(e)}", "done": False}]
 
-    todo_items = "".join([f'<li>{"<s>" if t["done"] else ""}{t["title"]}{"</s>" if t["done"] else ""}</li>' for t in todos])
+    todo_items = "".join([
+        f'<li style="display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.03); padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255, 255, 255, 0.05); font-size: 14px;">'
+        f'<span>{"<s>" if t["done"] else ""}{t["title"]}{"</s>" if t["done"] else ""}</span>'
+        f'<span style="font-size: 11px; background: { "rgba(16, 185, 129, 0.15)" if t["done"] else "rgba(99, 102, 241, 0.15)" }; color: { "#34d399" if t["done"] else "#a5b4fc" }; padding: 2px 8px; border-radius: 9999px;">'
+        f'{"Done" if t["done"] else "Active"}'
+        f'</span>'
+        f'</li>'
+        for t in todos
+    ])
     
     html = f'''
     <!DOCTYPE html>
@@ -435,14 +536,15 @@ def home_view(request):
         <title>Django Web IDE App</title>
         <style>
             body {{
-                font-family: 'Outfit', 'Inter', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                 background: linear-gradient(135deg, #1e1b4b, #111827);
                 color: #f8fafc;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                height: 100vh;
+                min-height: 100vh;
                 margin: 0;
+                padding: 24px;
             }}
             .card {{
                 background: rgba(255, 255, 255, 0.04);
@@ -451,45 +553,85 @@ def home_view(request):
                 border-radius: 16px;
                 padding: 32px;
                 box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-                max-width: 400px;
+                max-width: 450px;
                 width: 100%;
             }}
             h1 {{
                 font-size: 24px;
+                margin-top: 0;
                 margin-bottom: 8px;
                 background: linear-gradient(to right, #4ade80, #2dd4bf);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
             }}
             p {{ color: #94a3b8; font-size: 14px; margin-bottom: 24px; }}
-            ul {{ list-style: none; padding: 0; }}
-            li {{
-                background: rgba(255, 255, 255, 0.03);
-                padding: 12px 16px;
-                border-radius: 8px;
-                margin-bottom: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.05);
+            ul {{ list-style: none; padding: 0; margin: 0 0 24px 0; }}
+            .todo-form {{
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }}
+            .form-input {{
+                flex: 1;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
                 font-size: 14px;
+                outline: none;
+            }}
+            .form-input:focus {{
+                border-color: #4ade80;
+            }}
+            .btn {{
+                background: #2dd4bf;
+                border: none;
+                color: black;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+            }}
+            .btn:hover {{
+                background: #14b8a6;
             }}
         </style>
     </head>
     <body>
         <div class="card">
-            <h1>Django Server Active!</h1>
-            <p>Serving templates and connecting database dynamically.</p>
-            <h3>Django Tasks:</h3>
+            <h1>Django Task Board</h1>
+            <p>Served dynamically from Django. DB is SQLite db.sqlite3.</p>
             <ul>
                 {todo_items}
             </ul>
+            <form action="/add" method="POST" class="todo-form">
+                <input type="text" name="title" required placeholder="Add new task..." class="form-input" />
+                <button type="submit" class="btn">Add Task</button>
+            </form>
         </div>
     </body>
     </html>
     '''
     return HttpResponse(html)
 
+@csrf_exempt
+def add_task(request):
+    if request.method == "POST":
+        title = request.POST.get("title")
+        if title:
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("INSERT INTO tasks (title, done) VALUES (?, 0)", (title,))
+            conn.commit()
+            conn.close()
+    return redirect('/')
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', home_view),
+    path('add', add_task),
 ]
 """)
         
@@ -568,7 +710,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
         import sqlite3
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, title TEXT, done INTEGER)")
+        c.execute("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, done INTEGER)")
         c.execute("INSERT INTO tasks (title, done) VALUES ('Configure Django settings', 1)")
         conn.commit()
         conn.close()
